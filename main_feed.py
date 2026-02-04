@@ -53,7 +53,7 @@ model = model.to(DEVICE)
 model.eval()                   
 
 # OPEN VIDEO FEED
-cap = cv2.VideoCapture("rtsp://4220Elizabeth:BeauJesseSveta2025@192.168.7.242:554/stream1")  
+cap = cv2.VideoCapture(CAMERA_RTSP_URL)  
 
 # INITIALIZATION
 frame_idx = 0
@@ -89,7 +89,7 @@ while True:
         if not cap.isOpened():
             print("Reopening camera...")
             cap.release()
-            cap = cv2.VideoCapture("rtsp://4220Elizabeth:BeauJesseSveta2025@192.168.7.242:554/stream1")
+            cap = cv2.VideoCapture(CAMERA_RTSP_URL)
         continue
 
 
