@@ -1,4 +1,4 @@
-#  Backyard Possums Detection to Prevent Pet–Wildlife Conflicts 🦦
+#  Real-Time Possum Detection System for Backyard Wildlife–Pet Conflict Prevention 🦦
 **End-to-end computer vision pipeline for Real-Time possums detection using motion analysis and CNN classification**
 
 
@@ -201,11 +201,30 @@ False positives caused by insects, wind-driven vegetation, or IR noise are signi
 - **Recall:** 0.9964  
 - **Precision:** 1.0  
 
+Metrics are reported on session-level split to avoid temporal data leakage.
+
+### 🕒 Real-time Detection Snapshots
+
+Below are real-time examples captured during live camera inference.
+The system reports a possum detection only after satisfying the temporal consistency rule (≥ 3 detections within a 5-frame sliding window).
+
+
+
+| Terminal log confirming detection                                                                                                                       | Full frame                                                                                                                                 | ROI passed to CNN                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/1_48_.png" width="360"> | <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/01_48.png" width="250">   | <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/roi_001.jpg" width="100"> |
+| <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/03_56.png" width="360"> | <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/03_56_2.PNG" width="250"> | <img src="https://raw.githubusercontent.com/Sveta2732/cnn_possum_detection/455993ab1abbb074cb11eaec9e5293e3cd92d0a3/images/roi_000.jpg" width="100"> |
+
 **Key observations on real-time camera feed:**
 - Model triggers **immediately when a possum appears**.
-- Works **without delays** on live feed.
-- Sliding window mechanism ensures **stable predictions**, even if possums pause or move slowly.
 
+- Works without delays on live feed.
+
+- Sliding window mechanism ensures stable predictions, even if possums pause or move slowly.
+
+- Demonstrates true real-time detection, not offline inference.
+
+- Confirms temporal alignment between logs and video frames.
 ---
 
 ## 🔒 Limitations 
