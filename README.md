@@ -1,28 +1,64 @@
 #  Real-Time Possum Detection System for Backyard Wildlife–Pet Conflict Prevention 🦦
 **End-to-end computer vision pipeline for Real-Time possums detection using motion analysis and CNN classification**
 
-**https://possum-tracker.vercel.app/en**
+🌐 **Live project website:**  
+👉 https://possum-tracker.sveta.com.au/en
 
 
 
-The goal of this project is to build a real-time system that detects possums from a night camera feed.
-The system combines classical computer vision (background subtraction and motion detection) with a convolutional neural network trained via transfer learning.
-The final solution works on a continuous live camera feed, extracts motion-based regions of interest (ROIs), classifies them using a CNN, and confirms detection using temporal consistency logic. It can be extended for smart home automation (e.g., closing dog doors or activating feeding stations).
+The goal of this project is to build a **production-style end-to-end computer vision system**
+that not only detects possums from a live night camera feed,
+but also **records, stores, analyzes, and visualizes wildlife activity over time**.
+The system combines classical computer vision (background subtraction and motion detection) with a **convolutional neural network trained via transfer learning**.
+The system performs real-time detection, automatically opens a visit session,
+stores videos, frames, ROIs, and bounding boxes in cloud storage,
+persists metadata in a cloud database,
+and exposes analytics through a public dashboard website. It can be extended for smart home automation (e.g., closing dog doors or activating feeding stations).
 
-**Computer Vision · Deep Learning · CNN (Transfer Learning) · PyTorch · OpenCV · Real-Time Detection**
+
+**Computer Vision · Deep Learning · CNN (Transfer Learning) · PyTorch · OpenCV · Real-Time Detection**  ·  **FastAPI** · **Google Cloud Run** · **Cloud SQL (MySQL)** · **Google Cloud Storage** 
+
+---
+
+## 🚀 TL;DR
+
+Production-style end-to-end computer vision system that detects possums from live camera feeds, stores wildlife activity in cloud infrastructure, exposes analytics via FastAPI, and visualizes behaviour through an interactive public dashboard.
+
+Key features:
+
+- Real-time detection using OpenCV + Transfer Learning CNN  
+- Cloud-based media storage and structured analytics database  
+- Public analytics dashboard with behavioural insights  
+- Session-based detection logic reducing false positives  
+- Designed as an extensible smart home automation platform
+
+---
 
 ## ⚠️ **Project in Progress / Work in Progress**  
 
+## 🏗 System Architecture (End-to-End)
 
+The system is designed as a full pipeline, from live camera feed to analytics dashboard:
 
-**🛠 What I Did:**
-- Prepared training data from backyard video footage: extracted crops of possums and non-possum motion.
-- Implemented a CNN classification pipeline using **transfer learning with ResNet18**.
-- Connected the model to live RTSP camera feeds for real-time detection.
-- Developed a pipeline: motion detection → ROI extraction → classification → alerting.
-- Designed foundations for smart home automation: opening feeding boxes or controlling dog doors (planned).
-
-
+```
+Live Detection Pipeline
+----------------------
+Live Camera (RTSP)
+      ↓
+Real-time CV pipeline (OpenCV + CNN)
+      ↓
+Visit session logic (temporal consistency: 3/5 frames)
+      ↓
+Frames, ROIs & Video recorded locally
+      ↓
+Google Cloud Storage (videos, frames, ROIs)
+      ↓
+Google Cloud SQL (metadata, timestamps, bounding boxes)
+      ↓
+FastAPI backend (Google Cloud Run)
+      ↓
+Public analytics website (dashboard, calendar, activity feed)
+```
 ```
 
 Data Preparation & Model Training (offline / static videos)
@@ -39,32 +75,27 @@ Train CNN (ResNet18 transfer learning)
       ↓
 Model ready for live feed inference
 
-
-Live Detection Pipeline
-----------------------
-Camera feed
-      ↓
-Frame skipping (every N frames)
-      ↓
-Background subtraction (motion detection)
-      ↓
-ROI extraction + padding
-      ↓
-CNN classifier (possum / not possum, transfer learning ResNet18)
-      ↓
-Frame-level decision (Sliding window: last 5 frames)
-      ↓
-Trigger: 3/5 possum frames → STOP
-
 ```
+
+**🛠 What I Built:**
+- Designed a real-time computer vision pipeline for night possum detection.
+- Prepared training data from backyard video footage: extracted crops of possums and non-possum motion.
+- Implemented motion-based ROI extraction with CNN classification (**ResNet18 transfer learning**).
+- Developed temporal detection logic (3 out of 5 frames) to reduce false positives.
+- Connected the model to live RTSP camera feeds for real-time detection.
+- Implemented **visit session tracking** with automatic start/end logic.
+- Stored videos, frames, ROIs, and bounding boxes in **Google Cloud Storage**.
+- Persisted visit metadata, timestamps, and references in **Google Cloud SQL (MySQL)**.
+- Built a **FastAPI backend** with multiple analytics endpoints.
+- Designed and deployed a **public analytics website** to visualize possum activity.
+- Designed foundations for smart home automation: opening feeding boxes or controlling dog doors (planned).
 
 
 
 **🔮 Future Work / Next Steps:**
 - Compare **CNN vs transfer learning** performance.
 - Integrate smart home automation: open feeding boxes or close dog doors.
-- Implement **data logging** from the camera feed: record timestamps, number of possums detected, and their ROIs for further analysis and visualization.
-- Build **analytics dashboard** to track possum visits over time.
+
 
 
 **⚡ Technical Highlights**
@@ -91,9 +122,9 @@ Trigger: 3/5 possum frames → STOP
 
 Possums regularly visit the backyard at night, naturally triggering the curiosity and hunting instincts of our dog, Beau. To prevent potential attacks and injuries to both wildlife and pets, we decided to design a smart mechanism for the dog door that automatically closes when a possum is detected in the backyard, keeping the dog safely inside.
 
-Initially, the primary goal was to provide food — a carrot — to the possum. However, this attracted mices. This led to the idea of a smart feeding box that only opens for possums. Due to ethical considerations (in Australia, it is illegal to feed wildlife continuously), this feature is currently conceptual and intended purely as a prototype for testing detection logic.
+Initially, the primary goal was to provide food — a carrot — to the possum. However, this attracted mice. This led to the idea of a smart feeding box that only opens for possums. Due to ethical considerations (in Australia, it is illegal to feed wildlife continuously), this feature is currently conceptual and intended purely as a prototype for testing detection logic.
 
-Possums visit the backyard at nigh. Detecting possums in this environment is challenging: naive motion detectors produce many false positives caused by insects, wind-driven vegetation, mice, and infrared camera noise. The main challenge is therefore to reliably identify possums in low-light conditions while minimizing false alarms.
+Possums visit the backyard at night. Detecting possums in this environment is challenging: naive motion detectors produce many false positives caused by insects, wind-driven vegetation, mice, and infrared camera noise. The main challenge is therefore to reliably identify possums in low-light conditions while minimizing false alarms.
 
 
 ---
@@ -123,6 +154,11 @@ Data was collected directly from night camera recordings, not live feed.
 
 Motion detection was used to automatically generate **Regions of Interest (ROIs)**, which were then manually reviewed, sorted, and labeled.  
 
+- Total collected ROIs: **20,000+ images**
+- Training set: ~12,000 ROIs
+- Test set: session-based split to prevent temporal leakage
+
+
 #### Data Handling Decisions:
 
 -  **Session-based splitting:** ROIs from the same night session were kept together in either **train** or **test** sets.  
@@ -136,8 +172,6 @@ Motion detection was used to automatically generate **Regions of Interest (ROIs)
     - This helps the model learn to detect possums in natural night conditions, not just ideal still images.  
 
  
-
-#### Example ROIs
 
 #### Example ROIs
 
@@ -185,23 +219,114 @@ A possum is considered **detected** only if it appears in **at least 3 out of th
 - Ensures robust detection when possums move slowly or remain stationary.
 
 ---
+
+## ☁️ Cloud Infrastructure & API
+
+The project runs on Google Cloud and follows a production-style architecture:
+
+- **Google Cloud Storage**
+  - Stores visit videos, frames, and ROI images.
+  - Media is accessed via short-lived signed URLs.
+
+- **Google Cloud SQL (MySQL)**
+  - Stores visit sessions, timestamps, durations.
+  - Stores bounding boxes and representative ROIs.
+  - Manual approval workflow before media appears on the public website.
+
+- **FastAPI Backend (Google Cloud Run)**
+  - REST API exposing analytics and media metadata.
+  - Parallel query execution and in-memory caching for performance.
+
+### API Endpoints Overview
+
+1. **Date range visits**
+   - Returns number of visits and videos for calendar visualization.
+
+2. **Recent activity**
+   - Returns the 6 most recent possum visits with timestamps and representative images.
+
+3. **Daily visits**
+   - Returns all visits for a selected day with one video and image per visit.
+
+4. **Dashboard statistics**
+   - Returns aggregated metrics and charts used by the analytics dashboard.
+
+---
+## 🌐 Analytics Website & Visualization Platform
+
+The project includes a public interactive website:
+
+👉 https://possum-tracker.sveta.com.au/en
+
+The website explains the detection system, demonstrates real possum visits, and provides behavioral analytics.
+The website was developed using **Claude Code AI-assisted** development.
+
+I used AI as a productivity tool to help generate React components and UI logic while I focused on:
+
+- Designing data flows from backend APIs
+
+- Defining analytics structure
+
+- Designing UX and user navigation
+
+- Integrating real-time detection data into visualizations
+
+- The website acts as a presentation layer for the entire computer vision system.
+
+### 📊 Analytics Dashboard
+The dashboard visualizes key wildlife behaviour metrics collected from real detections.
+
+It includes:
+
+- **Core Metrics**: Total recorded possum visits, Average visits per night, Average visit duration, Peak activity hour, Most active night
+
+- **Activity Behaviour Charts**: Possum Visits by Hour of the Night, Visit Duration Distribution, Average Visits by Day of Week, Monthly Activity Trends, Night Activity Period Analysis
+
+- **Fence Entry and Exit Analysis**: Identifies where possums enter and leave the backyard.
+
+- **Fence Movement Heatmap**: Visualizes the most frequently used fence zones and activity intensity.
+
+<p align="left">
+  <img src="images/charts1.png" width="390">
+  <img src="images/charts2.png" width="350">
+</p>
+
+### 📅 Visit Calendar & Media Browser
+
+The website includes an interactive calendar that allows users to explore possum activity historically.
+
+- Displays number of visits recorded per day.
+
+- Selecting a specific date opens:
+
+  - All possum visits for that day.
+
+  - Video recordings of each visit.
+
+  - Representative ROI image for each visit.
+
+- Visit duration statistics.
+
+This allows users to visually review wildlife behaviour over time.
+<p align="left">
+  <img src="images/calendar.png" width="500">
+</p>
+---
+
 ## 🔦 Results
 
 The system **successfully detects possums** in real night conditions.  
 False positives caused by insects, wind-driven vegetation, or IR noise are significantly reduced compared to a naive motion detection approach.
 
-**Performance metrics on test set:**
+<p align="left">
+  <img src="images/model.png" width="700">
+</p>
 
-- **Best test accuracy:** 0.9974  
-- **Confusion matrix:**
+Model performance (test set):
 
-|             | Predicted Non-Possum | Predicted Possum |
-|-------------|-------------------:|----------------:|
-| Actual Non-Possum | 850                | 0               |
-| Actual Possum     | 8                  | 2203            |
-
-- **Recall:** 0.9964  
-- **Precision:** 1.0  
+- Accuracy: 0.9879  
+- Precision: 0.9825  
+- Recall: 0.9931
 
 Metrics are reported on session-level split to avoid temporal data leakage.
 
@@ -227,6 +352,21 @@ The system reports a possum detection only after satisfying the temporal consist
 - Demonstrates true real-time detection, not offline inference.
 
 - Confirms temporal alignment between logs and video frames.
+
+- The model was trained on data collected from one camera and successfully deployed on a different camera model,
+  demonstrating robustness to camera changes.
+
+- Compared against built-in camera motion detection (TP-Link Tapo), which frequently misses possums that my system successfully detects.
+---
+
+## ⚡ Performance & Scalability
+
+- Parallel execution of dashboard queries using ThreadPoolExecutor  
+- In-memory caching layer to reduce database load  
+- Connection pooling for Cloud SQL access  
+- Signed URL generation for secure and temporary media delivery  
+- Frame skipping and ROI filtering to maintain real-time inference speed 
+
 ---
 
 ## 🔒 Limitations 
@@ -245,21 +385,28 @@ While the system performs well in typical night conditions, several limitations 
 
 Currently, the system stops and prints a message when a possum is detected. Planned improvements include:
 
-- **Possum analytics:** Instead of exiting, the system will log detections with:
-  - Timestamp  
-  - ROI crops 
-  - Bounding boxes (Location in the backyard)
-  This data will enable graphs and analysis of possum activity over time.
+- Deploy the pipeline on **Raspberry Pi** for fully autonomous edge processing.
 
 - **Smart home integration:** Connect detection to devices such as:
-  - Automatic feeding box 🥕 *(prototype to test functionality; possums will **not be fed constantly**)*  
+  - **smart feeding box prototype** 🥕 (prototype to test functionality; possums will **not be fed constantly)  
   - Dog door lock mechanism 🚪  
   The system will trigger these devices when a possum is detected.
 
 - **Model experimentation:** Train a **standard CNN from scratch** without transfer learning to compare performance with the current ResNet18-based transfer learning model.
 
+- Expand training data to further reduce rare false positives (mice, pets).
+
 - 🎯 **Overall goal:** Gain **practical experience with CNNs**, improve **real-time detection reliability**, and build a **functional prototype for backyard wildlife management** and analytics.
 
+---
+
+## ⚖️ Ethical Considerations
+
+- Wildlife is **not continuously fed**.
+  Feeding box logic exists only as a prototype for detection testing.
+- All recorded videos are **stored privately**.
+- Media is displayed on the public website only after manual approval  by setting an `approved = true` flag in the database.
+- This prevents accidental exposure of private or sensitive footage.
 ---
 
 ## 📚 What I Learned
@@ -271,3 +418,5 @@ Currently, the system stops and prints a message when a possum is detected. Plan
 
 
 ---
+      AI tools were used as development accelerators, not replacements for system design.
+      All architecture, data modelling, backend API design, and analytics logic were designed and implemented manually.
