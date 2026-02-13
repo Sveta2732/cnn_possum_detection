@@ -1,17 +1,25 @@
+# FastAPI framework — used to create REST API endpoints
 from fastapi import FastAPI, Query
 import mysql.connector
+# Access environment variables (database credentials, connection strings)
 import os
 from datetime import date, timedelta
+# Google Cloud Storage SDK — used to generate signed URLs and access storage buckets
 from google.cloud import storage
+# Used to raise HTTP errors when invalid request parameters are received
 from fastapi import HTTPException
-from google.cloud import storage
+# Google authentication utilities for generating signed URLs securely
 from google.auth.transport.requests import Request
 from google.auth import default
 from google.auth import iam
+# Allows running multiple database queries in parallel (performance optimisation)
 from concurrent.futures import ThreadPoolExecutor, as_completed
+# MySQL connection pooling — reduces cost of creating new connections for each request by reusing a pool of connections
 from mysql.connector.pooling import MySQLConnectionPool
+# Threading utilities — used for caching and locking
 import threading
 import time
+# Enables cross-origin requests 
 from fastapi.middleware.cors import CORSMiddleware
 from graphs import (
     total_visits,
@@ -19,6 +27,7 @@ from graphs import (
     average_duration,
     pick_hour,
     max_day,
+    max_duration,
     weeks_comparison,
     month_comparison,
     hours_comparison,
@@ -29,12 +38,13 @@ from graphs import (
     heatmap_position
 )
 
+
 #App Initialization
 app = FastAPI()
 
+# Allows browser frontend to call backend
 app.add_middleware(
     CORSMiddleware,
-    # allow all websites
     allow_origins=[
     "https://possum-tracker.sveta.com.au",
     "https://possum-tracker.vercel.app",
@@ -48,10 +58,12 @@ app.add_middleware(
     allow_headers=["*"],   
 )
 
+#Creates connection to GCS.
 storage_client = storage.Client()
-
+# Fetches default credentials for the service account running this code (Cloud Run service account).
 credentials, _ = default()
 
+# Function to refresh credentials if they are expired. 
 def get_credentials():
 
     global credentials
@@ -61,7 +73,8 @@ def get_credentials():
 
     return credentials
 
-# Database connection function
+
+# Creates pool of reusable connections. 
 db_pool = MySQLConnectionPool(
     pool_name="possum_pool",
     # Can be Adjusted
@@ -69,15 +82,12 @@ db_pool = MySQLConnectionPool(
     user=os.environ["DB_USER"],
     password=os.environ["DB_PASS"],
     database=os.environ["DB_NAME"],
+    #Connects directly to Cloud SQL instance via Unix socket.
     unix_socket=f"/cloudsql/{os.environ['INSTANCE_CONNECTION_NAME']}"
 )
 
-
+# Returns a connection from the pool.
 def get_connection():
-    """
-    Returns a connection from the pool.
-    Pool dramatically reduces connection overhead.
-    """
     return db_pool.get_connection()
 
 # Google Storage helper logic
@@ -107,7 +117,8 @@ dashboard_cache = {
     "timestamp": 0
 }
 # Cache validity 
-CACHE_TTL_SECONDS = 60  
+CACHE_TTL_SECONDS = 120  
+# Prevents multiple threads updating cache simultaneously.
 cache_lock = threading.Lock()
 
 # Runs a dashboard metric query in its own DB connection.
@@ -125,6 +136,7 @@ def run_query_parallel(func):
 def fetch_visit_statistics(start_date: date, end_date: date):
 
     conn = get_connection()
+    # Returns rows as dictionaries instead of tuples.
     cursor = conn.cursor(dictionary=True)
 
     query = """
@@ -275,6 +287,7 @@ def dashboard():
         "average_duration": average_duration,
         "most_popular_hour": pick_hour,
         "max_visits_per_day": max_day,
+        "max_duration": max_duration,
         "average_visits_per_weekday": weeks_comparison,
         "visits_per_month": month_comparison,
         "visits_per_hour": hours_comparison,
@@ -309,3 +322,4 @@ def dashboard():
 
 #  Cloud CLI command to deploy the API to Google Cloud Run. 
 # gcloud run deploy possum-api --source . --region australia-southeast1 --allow-unauthenticated
+# gcloud config list
