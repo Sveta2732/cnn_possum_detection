@@ -134,6 +134,21 @@ def max_day(conn):
         "Maximum Visits per Day"
     )
 
+def max_duration(conn):
+    query = """
+        SELECT MAX(duration_seconds) AS max_duration_seconds
+        FROM  visits
+    """
+
+    return execute_chart_query(
+        conn,
+        query,
+        "Maximum duration",
+        "metric",
+        "",
+        "Maximum Duration (seconds)"
+    )
+
 def weeks_comparison(conn):
     query = """
         SELECT 
@@ -141,7 +156,7 @@ def weeks_comparison(conn):
             ROUND(AVG(visits_per_day), 0) AS average_number_of_visits
         FROM (
             SELECT 
-                DAYOFWEEK(night_date) AS day_of_week,
+                WEEKDAY(night_date) +1  AS day_of_week,
                 night_date,
                 COUNT(*) AS visits_per_day
             FROM visits

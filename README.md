@@ -24,13 +24,36 @@ and exposes analytics through a public dashboard website. It can be extended for
 
 Production-style end-to-end computer vision system that detects possums from live camera feeds, stores wildlife activity in cloud infrastructure, exposes analytics via FastAPI, and visualizes behaviour through an interactive public dashboard.
 
-Key features:
+**Key features:**
 
 - Real-time detection using OpenCV + Transfer Learning CNN  
 - Cloud-based media storage and structured analytics database  
 - Public analytics dashboard with behavioural insights  
 - Session-based detection logic reducing false positives  
 - Designed as an extensible smart home automation platform
+
+**Data:**
+
+Training data was collected from backyard night camera recordings using motion-based Region of Interest (ROI) extraction.
+- 20,000+ labeled ROIs
+- Session-based dataset splitting to prevent temporal data leakage
+- Noisy low-light infrared imagery
+
+**Method:**
+
+The system combines classical computer vision and deep learning
+
+**Results:**
+
+The system successfully performs real-time possum detection in challenging night conditions.
+
+- Accuracy: 98.79%
+- Precision: 98.25%
+- Recall: 99.31%
+
+Compared to built-in camera motion detection, the system significantly reduces false positives and detects possums missed by standard camera algorithms.
+The deployed system demonstrates stable real-time performance and robustness across different camera models.
+
 
 ---
 
@@ -93,7 +116,12 @@ Model ready for live feed inference
 
 
 **🔮 Future Work / Next Steps:**
+
 - Compare **CNN vs transfer learning** performance.
+- Introduce validation dataset and early stopping
+- Expand dataset diversity to improve robustness
+- Experiment with alternative model architectures
+- Deploy edge inference on embedded hardware (Raspberry Pi)
 - Integrate smart home automation: open feeding boxes or close dog doors.
 
 
@@ -109,7 +137,7 @@ Model ready for live feed inference
 
 **💡 Why it Matters to Employers** 
 
-    This project showcases the end-to-end lifecycle of a real-world computer vision system: from noisy data acquisition and preprocessing, to model training, and integration with a live camera feed.  
+This project showcases the end-to-end lifecycle of a real-world computer vision system: from noisy data acquisition and preprocessing, to model training, and integration with a live camera feed.  
 
 - Demonstrates ability to implement **real-time detection pipelines**.  
 - Shows hands-on experience in **data collection, preprocessing, and model training** under practical conditions.  

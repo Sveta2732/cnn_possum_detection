@@ -148,7 +148,7 @@ if __name__ == "__main__":
 
     for video_file in os.listdir(VIDEO_DIR):
         if video_file.lower().endswith((".mp4", ".avi", ".mov")):
-            process_video(os.path.join(VIDEO_DIR, video_file), OUTPUT_DIR, skip_frames=5)
+            process_video(os.path.join(VIDEO_DIR, video_file), OUTPUT_DIR, skip_frames=2)
 
     print("Done.")
 
