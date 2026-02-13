@@ -1,3 +1,4 @@
+# MySQL driver used to connect and interact with MySQL database
 import mysql.connector
 from datetime import datetime
 # Import database configuration
