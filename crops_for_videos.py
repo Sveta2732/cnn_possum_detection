@@ -20,32 +20,62 @@ def get_crops_from_frame(frame, bg_subtractor=BG_SUBTRACTOR, min_area=MIN_AREA, 
     Apply motion detection to a single frame and extract candidate ROIs.
 
     """
-    # Apply background subtraction
-    fg_mask = bg_subtractor.apply(frame)
-    
-    # Remove small noise
-    # MORPH_OPEN = erosion followed by dilation  removes small white noise (isolated pixels)
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
-    # MORPH_CLOSE = dilation followed by erosion  closes small black holes inside detected objects
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
-    
-    # Dilate to fill gaps in contours
-    # This makes each moving object contour more solid and continuous
-    fg_mask = cv2.dilate(fg_mask, kernel, iterations=2)
+    # Safety checks 
+    if frame is None:
+        return [], []
 
-    # Find contours of moving objects
-    # fg_mask: binary mask (white = motion, black = background)
-    # cv2.RETR_EXTERNAL: retrieve only the external contours (ignore nested/child contours)
-    # cv2.CHAIN_APPROX_SIMPLE: compress contour points to save memory (only key points)
-    # contours: list of contours, each contour is an array of points
-    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not hasattr(frame, "shape"):
+        return [], []
+
+    if frame.size == 0:
+        return [], []
+
+    if bg_subtractor is None or kernel is None:
+        return [], []
+
+    # Apply background subtraction
+    try:
+        fg_mask = bg_subtractor.apply(frame)
+    except Exception:
+        return [], []
+
+    if fg_mask is None or fg_mask.size == 0:
+        return [], []
+
+    try:
+        # Remove small noise
+        # MORPH_OPEN = erosion followed by dilation  removes small white noise (isolated pixels)
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
+        # MORPH_CLOSE = dilation followed by erosion  closes small black holes inside detected objects
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+        
+        # Dilate to fill gaps in contours
+        # This makes each moving object contour more solid and continuous
+        fg_mask = cv2.dilate(fg_mask, kernel, iterations=2)
+    except Exception:
+        return [], []  
+    
+    try:
+        # Find contours of moving objects
+        # fg_mask: binary mask (white = motion, black = background)
+        # cv2.RETR_EXTERNAL: retrieve only the external contours (ignore nested/child contours)
+        # cv2.CHAIN_APPROX_SIMPLE: compress contour points to save memory (only key points)
+        # contours: list of contours, each contour is an array of points
+        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    except Exception:
+        return [], []
+
     h_frame, w_frame = frame.shape[:2]
 
     rois = []
     bboxes = []
 
     for cnt in contours:
-        area = cv2.contourArea(cnt)
+        try:
+            area = cv2.contourArea(cnt)
+
+        except Exception:
+            continue
         if area < min_area:  # ignore small noisy contours
             continue
 
@@ -148,9 +178,13 @@ if __name__ == "__main__":
 
     for video_file in os.listdir(VIDEO_DIR):
         if video_file.lower().endswith((".mp4", ".avi", ".mov")):
-            process_video(os.path.join(VIDEO_DIR, video_file), OUTPUT_DIR, skip_frames=2)
+            process_video(os.path.join(VIDEO_DIR, video_file), OUTPUT_DIR, skip_frames=1)
 
     print("Done.")
+
+
+
+
 
 
 

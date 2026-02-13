@@ -174,7 +174,59 @@ Possums visit the backyard at night. Detecting possums in this environment is ch
 -  **ROI quality variability** – crops can be partial, occluded, or poorly illuminated, complicating CNN classification.  
 
 - **Manual labeling constraints** – creating representative non-possum and possum datasets is time-consuming and labor-intensive.  
+
 ---
+## Project Structure
+```
+
+possum_project/
+│
+├── main_feed.py                # Main realtime pipeline (RTSP stream processing + ML detection)
+├── config.py                   # Environment variables and global configuration
+├── logger.py                   # Centralized logging configuration
+│
+├── vision/                     # Computer vision preprocessing and dataset preparation
+│   ├── crops_for_videos.py     # Motion detection and ROI extraction from frames
+│   ├── random_sampling.py      # Random sampling of crops for training dataset balancing
+│   └──cleanup_crops.py        # Utility to remove invalid ROI images
+│   
+│
+├── inference/                  # Machine learning inference layer
+│   ├── model_loader.py         # Model architecture definition and weight loading
+│   ├── detector.py             # ROI classification logic using trained CNN
+│   └── transforms.py           # Image preprocessing and normalization pipeline
+│
+├── visits/                     # Possum visit lifecycle management
+│   └── visit_manager.py        # Visit creation, updating, and closing logic
+│
+├── video_utils/                # Video stream utilities
+│   ├── video_capture.py        # RTSP connection handling and reconnection logic
+│   └── trimming.py             # Post-visit video trimming and duration control
+│
+├── cloud/                      # Cloud storage integration and media processing
+│   ├── uploader.py             # Upload workflow for visits, frames, and ROIs
+│   ├── gcs_client.py           # Google Cloud Storage client wrapper
+│   └── encoder.py              # Video transcoding and compression (H264 conversion)
+│
+├── db/                         # Database access layer
+│   └── visit_repository.py     # SQL queries and persistence logic for visit data
+│
+├── models/                     # Stored trained model weights
+│   └── full_model_weight.pt
+│
+├── model_training/             # Model development and experimentation
+│   └── cnn.ipynb               # Transfer learning experiments and CNN training notebook
+│
+├── api/                        # Backend API serving dashboard and analytics data
+│                               # Provides endpoints for visits, media retrieval,
+│                               # and analytics integration
+│
+├── .env                        # Environment variables (not committed)
+├── requirements.txt            # Project dependencies
+└── README.md                   # Project documentation
+```
+---
+
 
 ## ✂️ Data Collection & Preparation
 
