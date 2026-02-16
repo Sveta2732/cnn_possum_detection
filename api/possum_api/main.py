@@ -217,6 +217,26 @@ def fetch_median_rois_by_date(current_date: date):
         cursor.close()
         conn.close()
 
+def fetch_record():
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+        SELECT
+            record_link
+        FROM records
+    """
+
+    try:
+        cursor.execute(query)
+        return cursor.fetchone()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 
 # API Endpoints
@@ -317,6 +337,20 @@ def dashboard():
         dashboard_cache["timestamp"] = time.time()
 
     return results
+
+# records
+@app.get("/records")
+def get_records():
+
+    row = fetch_record()
+
+    if not row:
+        return []
+
+    return [{
+        "record_url": generate_signed_url(row["record_link"])
+            if row["record_link"] else None
+    }]
 
 
 
