@@ -34,6 +34,7 @@ setup_logger()
 # PARAMETERS
 # Skip frames to reduce computational load and latency
 SKIP_FRAMES = 5                  # Only process every N-th frame
+STATIC_SAVE_INTERVAL_SEC = 10
 # Generate folder per day
 today = datetime.now().strftime("%Y-%m-%d")
 # Directory for storing possum-related media files
@@ -42,7 +43,7 @@ os.makedirs(POSSUM_DIR, exist_ok=True)
 # Select GPU if available, otherwise fallback to CPU
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Save only every N-th confirmed possum frame 
-FRAME_SAVE_INTERVAL = 3
+FRAME_SAVE_INTERVAL = 2
 
 # ML PREPARATION
 # Transform for inference
@@ -51,8 +52,16 @@ test_transform = build_test_transform()
 model = load_model(MODEL_PATH, DEVICE)
              
 # VIDEO CAPTURE INITIALISATION
+USE_VIDEO_FILE = False
+#VIDEO_PATH = "test_video.mp4"
+VIDEO_PATH = r"C:\Users\Home\Desktop\for_git\video_project\possum_detected\2026-02-21\visit_0125\visit.mp4"
 # Opens RTSP camera stream and retrieves FPS
-cap, v_fps = initialise_video_capture(RTSP_URL)
+if USE_VIDEO_FILE:
+    cap = cv2.VideoCapture(VIDEO_PATH)
+    v_fps = cap.get(cv2.CAP_PROP_FPS)
+else:
+    cap, v_fps = initialise_video_capture(RTSP_URL)
+
 
 # PIPELINE STATE VARIABLES
 # Global frame counter
@@ -63,9 +72,9 @@ start_time = time.time()
 window_size = 5       
 # Stores last N detection results to reduce false positives         
 possum_window = deque(maxlen=window_size) 
+no_motion_window = deque(maxlen=window_size)
 
-# Seconds without possum to close a visit
-VISIT_TIMEOUT = 120 
+
 # Current possum visit
 current_visit = None  
 
@@ -86,20 +95,31 @@ BG_SUBTRACTOR = cv2.createBackgroundSubtractorMOG2(
 while True:
     # Read frame from camera stream
     ret, frame = cap.read()
+    frame_timestamp = datetime.now()
 
     # Camera reconnect logic
     if not ret:
-        logging.info("Frame not received. Reconnecting...")
+        if USE_VIDEO_FILE:
+            logging.info("Video ended.")
+            if current_visit is not None:
+                logging.info("Closing active visit before exit.")
+                close_visit(current_visit, v_fps)
 
-        try:
-            cap.release()
-        except:
-            pass
-        # Wait before reconnect attempt
-        time.sleep(2)
-        cap, v_fps = initialise_video_capture(RTSP_URL)
+            break
+            
+        else:
 
-        continue
+            logging.info("Frame not received. Reconnecting...")
+
+            try:
+                cap.release()
+            except:
+                pass
+            # Wait before reconnect attempt
+            time.sleep(2)
+            cap, v_fps = initialise_video_capture(RTSP_URL)
+
+            continue
 
     # Frame integrity checks (protect pipeline from corrupted frames)
     if frame is None:
@@ -118,15 +138,15 @@ while True:
         time.sleep(1)
         continue
 
-    # Visit timeout logic
-    if current_visit is not None:
-        if (datetime.now() - current_visit["last_seen_time"]).total_seconds() > VISIT_TIMEOUT:
+    # # Visit timeout logic
+    # if current_visit is not None:
+    #     if (datetime.now() - current_visit["last_seen_time"]).total_seconds() > VISIT_TIMEOUT:
 
-            # Close visit session and trigger upload asynchronously
-            close_visit(current_visit, v_fps)
+    #         # Close visit session and trigger upload asynchronously
+    #         close_visit(current_visit, v_fps)
  
-            current_visit = None
-            possum_window.clear()
+    #         current_visit = None
+    #         possum_window.clear()
 
     # Save raw video if visit is active
     if current_visit is not None and current_visit["video_writer"] is not None:
@@ -139,6 +159,8 @@ while True:
         # Motion detection: get ROIs and bounding boxes
         rois, bboxes = get_crops_from_frame(frame, bg_subtractor=BG_SUBTRACTOR, min_area=MIN_AREA, padding_ratio=PADDING_RATIO, kernel=KERNEL)
 
+        if len(rois) > 0:
+            no_motion_window.clear()
         #  Initialize flag for possum detection in this frame
         # ML inference block
         try:
@@ -182,23 +204,120 @@ while True:
         # Update sliding window
         possum_window.append(possum_detected_in_frame)
 
+         # --- NEW: Handle no-motion but active visit ---
+        if current_visit is not None and len(rois) == 0:
+
+            if current_visit.get("last_bbox") is not None:
+
+                x1, y1, x2, y2 = current_visit["last_bbox"]
+
+                h, w = frame.shape[:2]
+                x1 = max(0, min(w, x1))
+                x2 = max(0, min(w, x2))
+                y1 = max(0, min(h, y1))
+                y2 = max(0, min(h, y2))
+
+                roi = frame[y1:y2, x1:x2]
+
+                if roi.size > 0:
+                    try:
+                        possum_detected, _, _, _ = detect_possums(
+                            [roi],
+                            [(x1, y1, x2, y2)],
+                            model,
+                            test_transform,
+                            DEVICE
+                        )
+
+                        no_motion_window.append(possum_detected)
+
+                    except Exception:
+                        logging.exception("Inference failed in no-motion mode")
+                        no_motion_window.append(False)
+
+                else:
+                    no_motion_window.append(False)
+
+                if len(no_motion_window) == window_size:
+
+                    # Continue visit if still enough positives
+                    if sum(no_motion_window) >= 3:
+                        logging.info("No motion but possum still detected - continuing visit")
+                        # Still possum - continue visit
+                        current_visit["last_seen_time"] = frame_timestamp
+                        current_visit["last_seen_frame"] = frame_idx
+
+                        # Save frame periodically
+                        #if frame_idx % FRAME_SAVE_INTERVAL == 0:
+                        now = frame_timestamp
+
+                        last_saved = current_visit.get("last_static_saved_time")
+
+                        should_save_static = (
+                            last_saved is None or
+                            (now - last_saved).total_seconds() >= STATIC_SAVE_INTERVAL_SEC
+                        )
+
+                        if should_save_static:    
+
+                            frame_path = os.path.join(
+                                current_visit["frames_dir"],
+                                f"frame_{frame_idx:06d}.jpg"
+                            )
+
+                            cv2.imwrite(frame_path, frame)
+
+                            current_visit["frame_upload_queue"].append(
+                                (frame_path, frame_timestamp)
+                            )
+
+                            # Save ROI
+                            roi_path = os.path.join(
+                                current_visit["rois_dir"],
+                                f"roi_{frame_idx:06d}_static.jpg"
+                            )
+
+                            cv2.imwrite(roi_path, roi)
+
+                            current_visit["roi_upload_queue"].append(
+                                (roi_path, (x1, y1, x2, y2), frame_path, frame_timestamp)
+                            )
+
+                            current_visit["last_static_saved_time"] = now
+
+                    # Close visit only if strong negative evidence
+                    elif sum(no_motion_window) <= 1:
+                        logging.info("Closing visit (no motion + no possum confirmed)")
+                        close_visit(current_visit, v_fps)
+                        current_visit = None
+                        no_motion_window.clear()
+
         # Check if 3 out of 5 last frames have possum
         if len(possum_window) == window_size and sum(possum_window) >= 3:
             logging.info(f"POSSUM DETECTED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             # Update existing visit timestamp
-            now_time = datetime.now()
+            #now_time = datetime.now()
+
             if current_visit is not None and possum_detected_in_frame:
-                current_visit["last_seen_time"] = now_time
+                #current_visit["last_seen_time"] = now_time
+                current_visit["last_seen_time"] = frame_timestamp
                 current_visit["last_seen_frame"] = frame_idx
+                if possum_detected_in_frame and len(possum_bboxes_in_frame) > 0:
+                    current_visit["last_bbox"] = possum_bboxes_in_frame[0]
 
             # Create new visit if none active
             if current_visit is None:
-                current_visit = create_new_visit(frame, POSSUM_DIR, frame_idx, v_fps                    )
+                current_visit = create_new_visit(frame, POSSUM_DIR, frame_idx, v_fps)
+                no_motion_window.clear()
+                current_visit["last_static_saved_time"] = None
+                if possum_detected_in_frame and len(possum_bboxes_in_frame) > 0:
+                    current_visit["last_bbox"] = possum_bboxes_in_frame[0]
            
 
             # Save visit frames and ROIs
             if frame_idx % FRAME_SAVE_INTERVAL == 0 and possum_detected_in_frame:
-                current_visit["last_seen_time"] = now_time
+                #current_visit["last_seen_time"] = now_time
+                current_visit["last_seen_time"] = frame_timestamp
                 current_visit["last_seen_frame"] = frame_idx
                 
 
@@ -206,7 +325,9 @@ while True:
                 cv2.imwrite(frame_path, frame)
                 visit_id = current_visit["visit_id"]
                 current_visit["frame_upload_queue"].append(
-                    (frame_path, now_time)
+
+                    #(frame_path, now_time)
+                    (frame_path, frame_timestamp)
                 )
  
                 for roi_num, roi in enumerate(possum_rois_in_frame):
@@ -220,7 +341,8 @@ while True:
 
 
                     current_visit["roi_upload_queue"].append(
-                        (roi_path, possum_bboxes_in_frame[roi_num], frame_path, now_time)
+                        #(roi_path, possum_bboxes_in_frame[roi_num], frame_path, now_time)
+                        (roi_path, possum_bboxes_in_frame[roi_num], frame_path, frame_timestamp)
                     )
 
     frame_idx += 1

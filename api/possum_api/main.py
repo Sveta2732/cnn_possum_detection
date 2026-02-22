@@ -35,7 +35,9 @@ from graphs import (
     hist_duration,
     start_fence_position,
     end_fence_position,
-    heatmap_position
+    heatmap_position,
+    activity_speed_distance,
+    activity_hour
 )
 
 
@@ -315,7 +317,9 @@ def dashboard():
         "duration_histogram": hist_duration,
         "start_fence_position": start_fence_position,
         "end_fence_position": end_fence_position,
-        "heatmap_position": heatmap_position
+        "heatmap_position": heatmap_position,
+        "activity_speed_distance": activity_speed_distance,
+        "activity_hour": activity_hour
     }
 
     results = {}

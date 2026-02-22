@@ -388,5 +388,45 @@ def heatmap_position(conn):
         fetch_one=False
     )
 
+def activity_speed_distance(conn):
+    query = """
+        SELECT 
+            visit_id, visit_duration_sec_calculated, 
+            activity_ratio, 
+            total_distance_px as total_distance_cm, 
+            avg_speed_px_per_sec as avg_speed_cm_per_sec
+        FROM visit_statistics
+    """
+
+    return execute_chart_query(
+        conn,
+        query,
+        "activity_speed_distance",
+        "mix",
+        "mix",
+        "mix",
+        fetch_one=False
+    )
+
+def activity_hour(conn):
+    query = """
+        SELECT 
+            round(avg(activity_ratio), 3) as average_activity_ratio,
+            HOUR(start_time) as hour
+        FROM visit_statistics s
+        LEFT JOIN visits v ON s.visit_id = v.visit_id
+        GROUP BY hour
+    """
+
+    return execute_chart_query(
+        conn,
+        query,
+        "Activity by Hour",
+        "line",
+        "Hour of Day",
+        "Average Activity Ratio",
+        fetch_one=False
+    )
+
 
 

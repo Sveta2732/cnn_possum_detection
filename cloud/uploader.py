@@ -6,7 +6,8 @@ from db.visit_repository import (
     update_visit_video,
     insert_frame,
     insert_roi,
-    compute_representative_roi
+    compute_representative_roi,
+    recalculate_visit_statistics
 )
 
 
@@ -41,15 +42,20 @@ def upload_visit_media(visit):
 
         
         for frame_path, timestamp in visit["frame_upload_queue"]:
-            # Extract filename from full local path
-            filename = os.path.basename(frame_path)
-             # Define GCS storage path for frame
-            gcs_path = f"visits/visit_{visit_id}/frames/{filename}"
-            # Upload frame image to GCS and get public URL
-            frame_url = upload_file(frame_path, gcs_path)
+            # # Extract filename from full local path
+            # filename = os.path.basename(frame_path)
+            #  # Define GCS storage path for frame
+            # gcs_path = f"visits/visit_{visit_id}/frames/{filename}"
+            # # Upload frame image to GCS and get public URL
+            # frame_url = upload_file(frame_path, gcs_path)
             # Insert frame record into DB and retrieve frame_id
-            frame_id = insert_frame(visit_id, frame_url, timestamp)
-            # Store mapping for ROI linking later
+            # frame_id = insert_frame(visit_id, frame_url, timestamp)
+            # # Store mapping for ROI linking later
+            # frame_id_map[frame_path] = frame_id
+
+            
+            frame_id = insert_frame(visit_id, timestamp)
+
             frame_id_map[frame_path] = frame_id
 
         # ROIS
@@ -72,6 +78,12 @@ def upload_visit_media(visit):
 
         # Select middle ROI for visit preview
         compute_representative_roi(visit["visit_id"])
+        try:
+            recalculate_visit_statistics(visit_id)
+        except Exception as e:
+            logging.exception(
+                f"Failed to recalculate statistics for visit {visit_id}"
+            )
         
         #for frame_path, _ in visit["frame_upload_queue"]:
             #if os.path.exists(frame_path):
@@ -83,3 +95,7 @@ def upload_visit_media(visit):
 
     except Exception as e:
         logging.exception("Upload failed")
+
+
+
+
