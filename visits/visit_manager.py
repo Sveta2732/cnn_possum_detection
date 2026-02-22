@@ -85,7 +85,7 @@ def close_visit(current_visit, fps):
         target=upload_visit_media,
         args=(visit_snapshot,),
         # Marks thread as daemon so it stops when main program exits
-        daemon=True
+        #daemon=True
     ).start()
 
     logging.info(
