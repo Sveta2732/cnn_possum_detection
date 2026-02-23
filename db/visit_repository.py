@@ -91,6 +91,25 @@ def insert_roi(frame_id, roi_url, bbox, timestamp):
     """, (frame_id, roi_url, x1, y1, x2, y2, timestamp))
 
     db.commit()
+    return cur.lastrowid
+
+def update_roi_url(roi_id, roi_url):
+    db.ping(reconnect=True)
+    cur.execute("""
+        UPDATE rois
+        SET roi_url = %s
+        WHERE roi_id = %s
+    """, (roi_url, roi_id))
+    db.commit()
+
+def update_representative_roi(visit_id, roi_id):
+    db.ping(reconnect=True)
+    cur.execute("""
+        UPDATE visits
+        SET representative_roi_id = %s
+        WHERE visit_id = %s
+    """, (roi_id, visit_id))
+    db.commit()
 
 
 def compute_representative_roi(visit_id: int):

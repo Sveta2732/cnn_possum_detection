@@ -61,12 +61,12 @@ def close_visit(current_visit, fps):
         # Releases video writer and finalizes video file
         current_visit["video_writer"].release()
 
-        trim_video(
-            current_visit["video_path"],
-            current_visit["start_frame"],
-            current_visit["last_seen_frame"],
-            fps
-        )
+        # trim_video(
+        #     current_visit["video_path"],
+        #     current_visit["start_frame"],
+        #     current_visit["last_seen_frame"],
+        #     fps
+        # )
 
     update_visit_end(
         current_visit["visit_id"],
