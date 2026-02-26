@@ -6,8 +6,11 @@ from db.visit_repository import (
     update_visit_video,
     insert_frame,
     insert_roi,
+    update_roi_url,
     compute_representative_roi,
-    recalculate_visit_statistics
+    update_representative_roi,
+    recalculate_visit_statistics,
+    with_db_retry
 )
 
 
@@ -33,7 +36,7 @@ def upload_visit_media(visit):
         # Upload video file to GCS and store returned URL
         video_url = upload_file(video_local, gcs_video_path)
         # Save video URL into visits table in the database
-        update_visit_video(visit_id, video_url)
+        with_db_retry(update_visit_video, visit_id, video_url)
         #if os.path.exists(video_local):
             #os.remove(video_local)
 
@@ -55,7 +58,7 @@ def upload_visit_media(visit):
             # frame_id_map[frame_path] = frame_id
 
             
-            frame_id = insert_frame(visit_id, timestamp)
+            frame_id = with_db_retry(insert_frame, visit_id, timestamp)
 
             frame_id_map[frame_path] = frame_id
 
@@ -78,7 +81,7 @@ def upload_visit_media(visit):
         for roi_path, bbox, frame_path, roi_timestamp in visit["roi_upload_queue"]:
             # Insert ROI record if matching frame exists
             if frame_path in frame_id_map:
-                roi_id = insert_roi(frame_id_map[frame_path], None, bbox, roi_timestamp)
+                roi_id = with_db_retry(insert_roi, frame_id_map[frame_path], None, bbox, roi_timestamp)
                 all_roi_records.append((roi_id, roi_path))
             else:
                 logging.warning(f"ROI skipped, frame not found: {frame_path}")
@@ -86,9 +89,9 @@ def upload_visit_media(visit):
         n = len(all_roi_records)
 
         if n == 0:
-            update_representative_roi(visit_id, None)
+            with_db_retry(update_representative_roi, visit_id, None)
             try:
-                recalculate_visit_statistics(visit_id)
+                with_db_retry(recalculate_visit_statistics, visit_id)
             except Exception:
                 logging.exception("Statistics recalculation failed")
             return
@@ -107,7 +110,6 @@ def upload_visit_media(visit):
             indices = sorted(set(indices))
             selected = [all_roi_records[i] for i in indices]
 
-        median_index = (n - 1) // 2
 
         for roi_id, roi_path in selected:
 
@@ -116,13 +118,12 @@ def upload_visit_media(visit):
 
             roi_url = upload_file(roi_path, gcs_path)
 
-            update_roi_url(roi_id, roi_url)
+            with_db_retry(update_roi_url, roi_id, roi_url)
 
-        representative_roi_id = all_roi_records[median_index][0]
+        representative_roi_id = all_roi_records[min(n - 1, int(n * 0.50))][0]
 
-        update_representative_roi(visit_id, representative_roi_id)
+        with_db_retry(update_representative_roi, visit_id, representative_roi_id)
 
-        
         
         # logging
         logging.info(f"Uploading {len(visit['frame_upload_queue'])} frames")
@@ -130,8 +131,9 @@ def upload_visit_media(visit):
 
         # Select middle ROI for visit preview
         #compute_representative_roi(visit["visit_id"])
+
         try:
-            recalculate_visit_statistics(visit_id)
+            with_db_retry(recalculate_visit_statistics, visit_id)
         except Exception as e:
             logging.exception(
                 f"Failed to recalculate statistics for visit {visit_id}"

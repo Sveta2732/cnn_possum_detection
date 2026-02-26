@@ -26,3 +26,4 @@ def get_ffmpeg_path():
 BASE_DIR = os.path.dirname(__file__)
 MODEL_PATH = os.path.join(BASE_DIR, "models", "full_model_weight.pt")
 
+ESP32_IP = "192.168.5.200"

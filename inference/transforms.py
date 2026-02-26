@@ -39,3 +39,33 @@ def build_test_transform():
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
+
+def expand_bbox(bbox, frame_shape, scale=1.8):
+    """
+    Expands bounding box by a scale factor while keeping it inside frame boundaries.
+
+    """
+    x1, y1, x2, y2 = bbox
+    h, w = frame_shape[:2]
+
+    box_width = x2 - x1
+    box_height = y2 - y1
+
+    new_width = int(box_width * scale)
+    new_height = int(box_height * scale)
+
+    center_x = x1 + box_width // 2
+    center_y = y1 + box_height // 2
+
+    x1_new = center_x - new_width // 2
+    x2_new = center_x + new_width // 2
+    y1_new = center_y - new_height // 2
+    y2_new = center_y + new_height // 2
+
+    # Clamp to frame boundaries
+    x1_new = max(0, x1_new)
+    y1_new = max(0, y1_new)
+    x2_new = min(w, x2_new)
+    y2_new = min(h, y2_new)
+
+    return int(x1_new), int(y1_new), int(x2_new), int(y2_new)

@@ -1,157 +1,216 @@
 # MySQL driver used to connect and interact with MySQL database
 import mysql.connector
 from datetime import datetime
+import time
 # Import database configuration
 from config import DB_CONFIG
 import logging
 import numpy as np
 import cv2
+from contextlib import contextmanager
+from mysql.connector import pooling
 
 # Connect to the database
-db = mysql.connector.connect(**DB_CONFIG)
-# Create cursor object used to execute SQL queries
-cur = db.cursor()
+# db = mysql.connector.connect(**DB_CONFIG)
+# # Create cursor object used to execute SQL queries
+# cur = db.cursor()
 
+# Create a MySQL connection pool to reuse DB connections
+connection_pool = pooling.MySQLConnectionPool(
+    pool_name="possum_pool",
+    # Maximum simultaneous connections
+    pool_size=5,            
+    # Reset session state when returning connection to pool  
+    pool_reset_session=True,
+    connect_timeout=5,
+    **DB_CONFIG
+)
 
-# Visit Repository functions
+def get_connection():
+    """
+    Retrieve a connection from the pool.
+    """
+    return connection_pool.get_connection()
+
+def with_db_retry(operation, *args, retries=5, base_delay=1, **kwargs):
+    """
+    Executes a DB operation with retry and exponential backoff.
+    """
+
+    for attempt in range(1, retries + 1):
+        try:
+            return operation(*args, **kwargs)
+
+        except Exception as e:
+            logging.warning(
+                f"DB operation failed (attempt {attempt}/{retries}): {e}"
+            )
+            # If this was the final attempt — raise permanent error
+            if attempt == retries:
+                logging.error(
+                    f"PERMANENT DB FAILURE after {retries} attempts: {e}"
+                )
+                raise  
+            # Exponential backoff delay before next retry
+            sleep_time = base_delay * (2 ** (attempt - 1))
+            time.sleep(sleep_time)
+
+@contextmanager
+def db_cursor():
+    """
+    Context manager for safe DB usage.
+
+    Automatically:
+    - gets connection from pool
+    - creates cursor
+    - closes cursor
+    - returns connection back to pool
+    """
+    db = get_connection()
+    cur = db.cursor()
+    try:
+        yield db, cur
+    # Always clean up resources
+    finally:
+        cur.close()
+        db.close()
 
 def insert_visit(start_time):
     """
-    Inserts a new possum visit record.
+     Inserts a new possum visit record.
     """
-    # Ensure connection is alive and reconnect if necessary
-    db.ping(reconnect=True)
     now_time = datetime.now()
-    cur.execute("""
-        INSERT INTO visits (start_time, created_at)
-        VALUES (%s, %s)
-    """, (start_time, now_time))
-    # Commit transaction to persist changes
-    db.commit()
-    # Return generated visit ID
-    return cur.lastrowid
+
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            INSERT INTO visits (start_time, created_at)
+            VALUES (%s, %s)
+        """, (start_time, now_time))
+        # Commit transaction to persist changes
+        db.commit()
+        # Return generated visit ID
+        return cur.lastrowid
+
 
 def update_visit_end(visit_id, end_time):
     """
     Updates the visit end timestamp when possum activity stops.
     """
-    db.ping(reconnect=True)
-    cur.execute("""
-        UPDATE visits
-        SET end_time = %s
-        WHERE visit_id = %s
-    """, (end_time, visit_id))
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            UPDATE visits
+            SET end_time = %s
+            WHERE visit_id = %s
+        """, (end_time, visit_id))
 
-    db.commit()
+        db.commit()
 
 def update_visit_video(visit_id, video_url):
     """
     Stores the cloud storage URL of the recorded visit video.
     """
-    db.ping(reconnect=True)
-    cur.execute("""
-        UPDATE visits
-        SET video_url = %s
-        WHERE visit_id = %s
-    """, (video_url, visit_id))
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            UPDATE visits
+            SET video_url = %s
+            WHERE visit_id = %s
+        """, (video_url, visit_id))
 
-    db.commit()
+        db.commit()
 
 # Frame functions
-#def insert_frame(visit_id, frame_url, timestamp):
 def insert_frame(visit_id, timestamp):
-    """
-    Inserts a frame associated with a visit.
-    """
-    db.ping(reconnect=True)
-    # cur.execute("""
-    #     INSERT INTO frames (visit_id, frame_url, frame_timestamp)
-    #     VALUES (%s, %s, %s)
-    # """, (visit_id, frame_url, timestamp))
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            INSERT INTO frames (visit_id, frame_timestamp)
+            VALUES (%s, %s)
+        """, (visit_id, timestamp))
 
-    cur.execute("""
-        INSERT INTO frames (visit_id, frame_timestamp)
-        VALUES (%s, %s)
-    """, (visit_id, timestamp))
-
-    db.commit()
-    # Return generated frame ID
-    return cur.lastrowid
+        db.commit()
+        return cur.lastrowid
+    
+   
 
 # ROI functions
+
 def insert_roi(frame_id, roi_url, bbox, timestamp):
     """
     Inserts a Region of Interest (ROI) extracted from a frame.
     """
     x1, y1, x2, y2 = bbox
-    db.ping(reconnect=True)
-    cur.execute("""
-        INSERT INTO rois (frame_id, roi_url, bbox_x1, bbox_y1, bbox_x2, bbox_y2, roi_timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (frame_id, roi_url, x1, y1, x2, y2, timestamp))
 
-    db.commit()
-    return cur.lastrowid
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            INSERT INTO rois (frame_id, roi_url, bbox_x1, bbox_y1, bbox_x2, bbox_y2, roi_timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (frame_id, roi_url, x1, y1, x2, y2, timestamp))
+
+        db.commit()
+        return cur.lastrowid
 
 def update_roi_url(roi_id, roi_url):
-    db.ping(reconnect=True)
-    cur.execute("""
-        UPDATE rois
-        SET roi_url = %s
-        WHERE roi_id = %s
-    """, (roi_url, roi_id))
-    db.commit()
+    with db_cursor() as (db, cur):
+        cur.execute("""
+            UPDATE rois
+            SET roi_url = %s
+            WHERE roi_id = %s
+        """, (roi_url, roi_id))
+
+        db.commit()
 
 def update_representative_roi(visit_id, roi_id):
-    db.ping(reconnect=True)
-    cur.execute("""
-        UPDATE visits
-        SET representative_roi_id = %s
-        WHERE visit_id = %s
-    """, (roi_id, visit_id))
-    db.commit()
-
-
-def compute_representative_roi(visit_id: int):
-    """
-    Selects and stores a representative ROI for a visit.
-    """
-    db.ping(reconnect=True)
-
-    cur.execute("""
-        SELECT roi_id
-        FROM (
-            SELECT
-                r.roi_id,
-                ROW_NUMBER() OVER (
-                    PARTITION BY v.visit_id
-                    ORDER BY f.frame_id, r.roi_id
-                ) AS rn,
-                COUNT(*) OVER (
-                    PARTITION BY v.visit_id
-                ) AS total
-            FROM visits v
-            JOIN frames f ON f.visit_id = v.visit_id
-            JOIN rois r ON r.frame_id = f.frame_id
-            WHERE v.visit_id = %s
-        ) t
-        WHERE rn = FLOOR((total + 1) / 2)
-    """, (visit_id,))
-
-    row = cur.fetchone()
-
-    if row:
-        rep_roi_id = row[0]
-
+    with db_cursor() as (db, cur):
         cur.execute("""
             UPDATE visits
             SET representative_roi_id = %s
             WHERE visit_id = %s
-        """, (rep_roi_id, visit_id))
+        """, (roi_id, visit_id))
 
         db.commit()
 
 
+def compute_representative_roi(visit_id):
+    """
+    Selects and stores a representative ROI for a visit.
+    """
+    # db.ping(reconnect=True)
+    try:
+        with db_cursor() as (db, cur):
+
+            cur.execute("""
+                SELECT roi_id
+                FROM (
+                    SELECT
+                        r.roi_id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY v.visit_id
+                            ORDER BY f.frame_id, r.roi_id
+                        ) AS rn,
+                        COUNT(*) OVER (
+                            PARTITION BY v.visit_id
+                        ) AS total
+                    FROM visits v
+                    JOIN frames f ON f.visit_id = v.visit_id
+                    JOIN rois r ON r.frame_id = f.frame_id
+                    WHERE v.visit_id = %s
+                ) t
+                WHERE rn = FLOOR((total + 1) / 2)
+            """, (visit_id,))
+
+            row = cur.fetchone()
+
+            if row:
+                rep_roi_id = row[0]
+
+                cur.execute("""
+                    UPDATE visits
+                    SET representative_roi_id = %s
+                    WHERE visit_id = %s
+                """, (rep_roi_id, visit_id))
+
+                db.commit()
+    except Exception:
+        logging.exception("Representative ROI computation failed")
 
 
 ZONE_SPLIT_X = 700
@@ -201,10 +260,6 @@ right_real = np.array([
 
 H_right = cv2.getPerspectiveTransform(right_img, right_real)
 
-
-
-
-
 def recalculate_visit_statistics(visit_id):
     """
     Recalculate visit statistics using adaptive movement threshold
@@ -212,238 +267,245 @@ def recalculate_visit_statistics(visit_id):
     """
 
     try:
-        db.ping(reconnect=True)
+        # db.ping(reconnect=True)
+        with db_cursor() as (db, cur):
+            try:
 
-        cur.execute("""
-            SELECT
-                r.roi_id,
-                r.roi_timestamp,
-                CAST((r.bbox_x1 + r.bbox_x2)/2 AS DOUBLE) AS cx,
-                CAST((r.bbox_y1 + r.bbox_y2)/2 AS DOUBLE) AS cy,
-                CAST((r.bbox_x2 - r.bbox_x1) AS DOUBLE) AS bbox_width
-            FROM rois r
-            JOIN frames f ON r.frame_id = f.frame_id
-            WHERE f.visit_id = %s
-              AND r.bbox_x1 IS NOT NULL
-              AND r.bbox_x2 IS NOT NULL
-              AND r.bbox_y1 IS NOT NULL
-              AND r.bbox_y2 IS NOT NULL
-            ORDER BY r.roi_timestamp, r.roi_id
-        """, (visit_id,))
+                cur.execute("""
+                    SELECT
+                        r.roi_id,
+                        r.roi_timestamp,
+                        CAST((r.bbox_x1 + r.bbox_x2)/2 AS DOUBLE) AS cx,
+                        CAST((r.bbox_y1 + r.bbox_y2)/2 AS DOUBLE) AS cy,
+                        CAST((r.bbox_x2 - r.bbox_x1) AS DOUBLE) AS bbox_width
+                    FROM rois r
+                    JOIN frames f ON r.frame_id = f.frame_id
+                    WHERE f.visit_id = %s
+                    AND r.bbox_x1 IS NOT NULL
+                    AND r.bbox_x2 IS NOT NULL
+                    AND r.bbox_y1 IS NOT NULL
+                    AND r.bbox_y2 IS NOT NULL
+                    ORDER BY r.roi_timestamp, r.roi_id
+                """, (visit_id,))
 
-        rows = cur.fetchall()
-
-
-
-        if len(rows) < 2:
-            return
-
-        # FILTER ROIS: keep one ROI per timestamp (compare by X only)
-        filtered_rows = []
-
-        prev_cx = None
-        i = 0
-
-        while i < len(rows):
-
-            current_ts = rows[i][1]
-            same_ts_group = []
-
-            # collect all ROIs with same timestamp
-            while i < len(rows) and rows[i][1] == current_ts:
-                same_ts_group.append(rows[i])
-                i += 1
-
-            # if only one ROI → keep it
-            if len(same_ts_group) == 1:
-                chosen = same_ts_group[0]
-
-            else:
-                # multiple ROIs in same timestamp
-                if prev_cx is None:
-                    # first frame → take first ROI
-                    chosen = same_ts_group[0]
-                else:
-                    # choose ROI closest by X only
-                    min_dx = float("inf")
-                    chosen = None
-
-                    for roi in same_ts_group:
-                        _, _, cx, _, _ = roi
-                        cx = float(cx)
-
-                        dx = abs(cx - prev_cx)
-
-                        if dx < min_dx:
-                            min_dx = dx
-                            chosen = roi
-
-            filtered_rows.append(chosen)
-
-            # update previous X
-            _, _, cx, _, _ = chosen
-            prev_cx = float(cx)
-
-        total_time = 0.0
-        moving_time = 0.0
-        idle_time = 0.0
-        total_distance_cm = 0.0
-        max_speed = 0.0
-
-        prev_ts = None
-        prev_cx = None
-        prev_cy = None
-
-        for roi_id, ts, cx, cy, bbox_width in filtered_rows:
-
-            cx = float(cx)
-            cy = float(cy)
-            bbox_width = float(bbox_width)
-
-            if prev_ts is not None:
-
-                delta_time = (ts - prev_ts).total_seconds()
-
-                if delta_time > 0:
-
-                    zone_prev = get_zone(prev_cx)
-                    zone_curr = get_zone(cx)
-
-                    # --- COEFFICIENTS (always defined before usage) ---
-                    coef_prev = PIXEL_TO_CM[zone_prev]
-                    coef_curr = PIXEL_TO_CM[zone_curr]
-                    coef = (coef_prev + coef_curr) / 2
-
-                    point_prev = np.array([[[prev_cx, prev_cy]]], dtype=np.float32)
-                    point_curr = np.array([[[cx, cy]]], dtype=np.float32)
-
-                    # SAME ZONE → use homography
-                    if zone_prev == zone_curr:
-
-                        if zone_curr == "LEFT":
-                            real_prev = cv2.perspectiveTransform(point_prev, H_left)
-                            real_curr = cv2.perspectiveTransform(point_curr, H_left)
-                        else:
-                            real_prev = cv2.perspectiveTransform(point_prev, H_right)
-                            real_curr = cv2.perspectiveTransform(point_curr, H_right)
-
-                        x1, y1 = real_prev[0][0]
-                        x2, y2 = real_curr[0][0]
-
-                        distance_cm = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
-
-                    # DIFFERENT ZONES → fallback to pixel coef
-                    else:
-
-                        distance_cm_px = ((cx - prev_cx)**2 + (cy - prev_cy)**2)**0.5
-                        distance_cm = distance_cm_px * coef
+                rows = cur.fetchall()
 
 
-                    # convert bbox width to cm
-                    bbox_width_cm = bbox_width * coef
 
-                    # convert minimal noise threshold (5px) to cm
-                    noise_cm = 10 * coef
+                if len(rows) < 2:
+                    return
 
-                    min_shift_cm = max(noise_cm, bbox_width_cm * 0.05)
+                # FILTER ROIS: keep one ROI per timestamp (compare by X only)
+                filtered_rows = []
 
-                    # print(
-                    #     f"visit={visit_id} "
-                    #     f"dt={delta_time:.3f}s "
-                    #     f"dist_cm={distance_cm:.2f} "
-                    #     f"cx_prev={prev_cx:.1f} "
-                    #     f"cx={cx:.1f}"
-                    #     f"min_shift_cm={min_shift_cm:.2f}"
-# )
+                prev_cx = None
+                i = 0
 
-                    # Always accumulate total observed time
-                    total_time += delta_time
+                while i < len(rows):
 
-                    # Handle large time gaps (likely idle period)
-                    if delta_time > 2:
+                    current_ts = rows[i][1]
+                    same_ts_group = []
 
-                        if distance_cm >= min_shift_cm:
-                            # Assume movement lasted at most 1 second
-                            move_part = 1.0
-                            moving_time += move_part
-                            idle_time += (delta_time - move_part)
-                            total_distance_cm += distance_cm
-                            speed = distance_cm / move_part
-                        else:
-                            # No significant displacement → full idle
-                            idle_time += delta_time
-                            speed = 0.0
+                    # collect all ROIs with same timestamp
+                    while i < len(rows) and rows[i][1] == current_ts:
+                        same_ts_group.append(rows[i])
+                        i += 1
+
+                    # if only one ROI keep it
+                    if len(same_ts_group) == 1:
+                        chosen = same_ts_group[0]
 
                     else:
-                        # Normal time interval
-                        if distance_cm >= min_shift_cm:
-                            moving_time += delta_time
-                            total_distance_cm += distance_cm
-                            speed = distance_cm / delta_time
+                        # multiple ROIs in same timestamp
+                        if prev_cx is None:
+                            # first frame take first ROI
+                            chosen = same_ts_group[0]
                         else:
-                            idle_time += delta_time
-                            speed = 0.0
+                            # choose ROI closest by X only
+                            min_dx = float("inf")
+                            chosen = None
 
-                    # Track peak speed (only meaningful for movement)
-                    if speed > max_speed:
-                        max_speed = speed
+                            for roi in same_ts_group:
+                                _, _, cx, _, _ = roi
+                                cx = float(cx)
 
-            prev_ts = ts
-            prev_cx = cx
-            prev_cy = cy
+                                dx = abs(cx - prev_cx)
 
-        if total_time == 0:
-            return
+                                if dx < min_dx:
+                                    min_dx = dx
+                                    chosen = roi
 
-        activity_ratio = moving_time / total_time if total_time > 0 else 0
-        avg_speed = total_distance_cm / moving_time if moving_time > 0 else 0
+                    filtered_rows.append(chosen)
 
-        # Fetch stored visit duration
-        cur.execute(
-            "SELECT duration_seconds FROM visits WHERE visit_id = %s",
-            (visit_id,)
-        )
-        duration_stored = cur.fetchone()[0]
+                    # update previous X
+                    _, _, cx, _, _ = chosen
+                    prev_cx = float(cx)
 
-        # Upsert statistics
-        cur.execute("""
-            INSERT INTO visit_statistics (
-            visit_id,
-            visit_duration_sec_stored,
-            visit_duration_sec_calculated,
-            moving_time_sec,
-            idle_time_sec,
-            activity_ratio,
-            total_distance_px,
-            avg_speed_px_per_sec,
-            max_speed_px_per_sec,
-            calculated_at
-        )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
-        ON DUPLICATE KEY UPDATE
-            visit_duration_sec_stored = VALUES(visit_duration_sec_stored),
-            visit_duration_sec_calculated = VALUES(visit_duration_sec_calculated),
-            moving_time_sec = VALUES(moving_time_sec),
-            idle_time_sec = VALUES(idle_time_sec),
-            activity_ratio = VALUES(activity_ratio),
-            total_distance_px = VALUES(total_distance_px),
-            avg_speed_px_per_sec = VALUES(avg_speed_px_per_sec),
-            max_speed_px_per_sec = VALUES(max_speed_px_per_sec),
-            calculated_at = NOW()
-        """, (
-            int(visit_id),
-            float(duration_stored),
-            float(round(total_time, 3)),
-            float(round(moving_time, 3)),
-            float(round(idle_time, 3)),
-            float(round(activity_ratio, 3)),
-            float(round(total_distance_cm, 2)),
-            float(round(avg_speed, 2)),
-            float(round(max_speed, 2))
-        ))
+                total_time = 0.0
+                moving_time = 0.0
+                idle_time = 0.0
+                total_distance_cm = 0.0
+                max_speed = 0.0
 
-        db.commit()
+                prev_ts = None
+                prev_cx = None
+                prev_cy = None
+
+                for roi_id, ts, cx, cy, bbox_width in filtered_rows:
+
+                    cx = float(cx)
+                    cy = float(cy)
+                    bbox_width = float(bbox_width)
+
+                    if prev_ts is not None:
+
+                        delta_time = (ts - prev_ts).total_seconds()
+
+                        if delta_time > 0:
+
+                            zone_prev = get_zone(prev_cx)
+                            zone_curr = get_zone(cx)
+
+                            # COEFFICIENTS 
+                            coef_prev = PIXEL_TO_CM[zone_prev]
+                            coef_curr = PIXEL_TO_CM[zone_curr]
+                            coef = (coef_prev + coef_curr) / 2
+
+                            point_prev = np.array([[[prev_cx, prev_cy]]], dtype=np.float32)
+                            point_curr = np.array([[[cx, cy]]], dtype=np.float32)
+
+                            # SAME ZONE use homography
+                            if zone_prev == zone_curr:
+
+                                if zone_curr == "LEFT":
+                                    real_prev = cv2.perspectiveTransform(point_prev, H_left)
+                                    real_curr = cv2.perspectiveTransform(point_curr, H_left)
+                                else:
+                                    real_prev = cv2.perspectiveTransform(point_prev, H_right)
+                                    real_curr = cv2.perspectiveTransform(point_curr, H_right)
+
+                                x1, y1 = real_prev[0][0]
+                                x2, y2 = real_curr[0][0]
+
+                                distance_cm = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
+
+                            # DIFFERENT ZONES fallback to pixel coef
+                            else:
+
+                                distance_cm_px = ((cx - prev_cx)**2 + (cy - prev_cy)**2)**0.5
+                                distance_cm = distance_cm_px * coef
+
+
+                            # convert bbox width to cm
+                            bbox_width_cm = bbox_width * coef
+
+                            # convert minimal noise threshold (5px) to cm
+                            noise_cm = 8 * coef
+
+                            min_shift_cm = max(noise_cm, bbox_width_cm * 0.05)
+
+                            # print(
+                            #     f"visit={visit_id} "
+                            #     f"dt={delta_time:.3f}s "
+                            #     f"dist_cm={distance_cm:.2f} "
+                            #     f"cx_prev={prev_cx:.1f} "
+                            #     f"cx={cx:.1f}"
+                            #     f"min_shift_cm={min_shift_cm:.2f}"
+        # )
+
+                            # Always accumulate total observed time
+                            total_time += delta_time
+
+                            # Handle large time gaps (likely idle period)
+                            if delta_time > 2:
+
+                                if distance_cm >= min_shift_cm:
+                                    # Assume movement lasted at most 1 second
+                                    move_part = 1.0
+                                    moving_time += move_part
+                                    idle_time += (delta_time - move_part)
+                                    total_distance_cm += distance_cm
+                                    speed = distance_cm / move_part
+                                else:
+                                    # No significant displacement → full idle
+                                    idle_time += delta_time
+                                    speed = 0.0
+
+                            else:
+                                # Normal time interval
+                                if distance_cm >= min_shift_cm:
+                                    moving_time += delta_time
+                                    total_distance_cm += distance_cm
+                                    speed = distance_cm / delta_time
+                                else:
+                                    idle_time += delta_time
+                                    speed = 0.0
+
+                            # Track peak speed (only meaningful for movement)
+                            if speed > max_speed:
+                                max_speed = speed
+
+                    prev_ts = ts
+                    prev_cx = cx
+                    prev_cy = cy
+
+                if total_time == 0:
+                    return
+
+                activity_ratio = moving_time / total_time if total_time > 0 else 0
+                avg_speed = total_distance_cm / moving_time if moving_time > 0 else 0
+
+                # Fetch stored visit duration
+                cur.execute(
+                    "SELECT duration_seconds FROM visits WHERE visit_id = %s",
+                    (visit_id,)
+                )
+                row = cur.fetchone()
+                duration_stored = row[0] if row and row[0] is not None else 0.0
+
+                # Upsert statistics
+                cur.execute("""
+                    INSERT INTO visit_statistics (
+                    visit_id,
+                    visit_duration_sec_stored,
+                    visit_duration_sec_calculated,
+                    moving_time_sec,
+                    idle_time_sec,
+                    activity_ratio,
+                    total_distance_px,
+                    avg_speed_px_per_sec,
+                    max_speed_px_per_sec,
+                    calculated_at
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                ON DUPLICATE KEY UPDATE
+                    visit_duration_sec_stored = VALUES(visit_duration_sec_stored),
+                    visit_duration_sec_calculated = VALUES(visit_duration_sec_calculated),
+                    moving_time_sec = VALUES(moving_time_sec),
+                    idle_time_sec = VALUES(idle_time_sec),
+                    activity_ratio = VALUES(activity_ratio),
+                    total_distance_px = VALUES(total_distance_px),
+                    avg_speed_px_per_sec = VALUES(avg_speed_px_per_sec),
+                    max_speed_px_per_sec = VALUES(max_speed_px_per_sec),
+                    calculated_at = NOW()
+                """, (
+                    int(visit_id),
+                    float(duration_stored),
+                    float(round(total_time, 3)),
+                    float(round(moving_time, 3)),
+                    float(round(idle_time, 3)),
+                    float(round(activity_ratio, 3)),
+                    float(round(total_distance_cm, 2)),
+                    float(round(avg_speed, 2)),
+                    float(round(max_speed, 2))
+                ))
+
+                db.commit()
+
+            except Exception:
+                db.rollback()
+                raise
 
     except Exception:
         logging.exception(f"Statistics recalculation failed for visit {visit_id}")
-        db.rollback()
+        

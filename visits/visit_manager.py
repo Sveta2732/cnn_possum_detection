@@ -8,12 +8,35 @@ import threading
 from db.visit_repository import update_visit_end
 from cloud.uploader import upload_visit_media
 from video_utils.trimming import trim_video
+from db.visit_repository import with_db_retry
+import queue
+
+upload_queue = queue.Queue()
+
+def upload_worker():
+    while True:
+        visit_snapshot = upload_queue.get()
+
+        if visit_snapshot is None:
+            break
+
+        try:
+            upload_visit_media(visit_snapshot)
+        except Exception:
+            logging.exception("Upload failed")
+        finally:
+            upload_queue.task_done()
+
+threading.Thread(
+    target=upload_worker,
+    daemon=True
+).start()
 
 # Function to initialize a new visit session with video and folder setup
 def create_new_visit(frame, base_dir, frame_idx, fps):
 
     now_time = datetime.now()
-    visit_id = insert_visit(now_time)
+    visit_id = with_db_retry(insert_visit, now_time)
     # Logs visit start time
     logging.info(f"Visit {visit_id} started at {now_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -67,11 +90,8 @@ def close_visit(current_visit, fps):
         #     current_visit["last_seen_frame"],
         #     fps
         # )
+    with_db_retry(update_visit_end, current_visit["visit_id"], current_visit["last_seen_time"])
 
-    update_visit_end(
-        current_visit["visit_id"],
-        current_visit["last_seen_time"]
-    )
 
     visit_snapshot = {
         "visit_id": current_visit["visit_id"],
@@ -81,12 +101,14 @@ def close_visit(current_visit, fps):
     }
 
     # Background function that uploads visit media to cloud storage without blocking main thread
-    threading.Thread(
-        target=upload_visit_media,
-        args=(visit_snapshot,),
-        # Marks thread as daemon so it stops when main program exits
-        #daemon=True
-    ).start()
+    # threading.Thread(
+    #     target=upload_visit_media,
+    #     args=(visit_snapshot,),
+    #     # Marks thread as daemon so it stops when main program exits
+    #     #daemon=True
+    # ).start()
+
+    upload_queue.put(visit_snapshot)
 
     logging.info(
         f"Visit {current_visit['visit_id']} closed."
