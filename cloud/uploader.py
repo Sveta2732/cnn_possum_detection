@@ -6,7 +6,9 @@ from db.visit_repository import (
     update_visit_video,
     insert_frame,
     insert_roi,
+    update_roi_url,
     compute_representative_roi,
+    update_representative_roi,
     recalculate_visit_statistics
 )
 
@@ -43,36 +45,12 @@ def upload_visit_media(visit):
 
         
         for frame_path, timestamp in visit["frame_upload_queue"]:
-            # # Extract filename from full local path
-            # filename = os.path.basename(frame_path)
-            #  # Define GCS storage path for frame
-            # gcs_path = f"visits/visit_{visit_id}/frames/{filename}"
-            # # Upload frame image to GCS and get public URL
-            # frame_url = upload_file(frame_path, gcs_path)
-            # Insert frame record into DB and retrieve frame_id
-            # frame_id = insert_frame(visit_id, frame_url, timestamp)
-            # # Store mapping for ROI linking later
-            # frame_id_map[frame_path] = frame_id
-
             
             frame_id = insert_frame(visit_id, timestamp)
 
             frame_id_map[frame_path] = frame_id
 
         # ROIS
-        # for roi_path, bbox, frame_path, roi_timestamp in visit["roi_upload_queue"]:
-
-            # filename = os.path.basename(roi_path)
-            # # Define GCS path for ROI image
-            # gcs_path = f"visits/visit_{visit_id}/rois/{filename}"
-            # # Upload ROI image
-            # roi_url = upload_file(roi_path, gcs_path)
-            # # Insert ROI record if matching frame exists
-            # if frame_path in frame_id_map:
-            #     insert_roi(frame_id_map[frame_path], roi_url, bbox, roi_timestamp)
-            # else:
-            #     print("ROI skipped, frame not found:", frame_path)
-
         all_roi_records = []
 
         for roi_path, bbox, frame_path, roi_timestamp in visit["roi_upload_queue"]:
@@ -118,11 +96,10 @@ def upload_visit_media(visit):
 
             update_roi_url(roi_id, roi_url)
 
-        representative_roi_id = all_roi_records[median_index][0]
+        representative_roi_id = all_roi_records[min(n - 1, int(n * 0.50))][0]
 
         update_representative_roi(visit_id, representative_roi_id)
 
-        
         
         # logging
         logging.info(f"Uploading {len(visit['frame_upload_queue'])} frames")
@@ -130,6 +107,7 @@ def upload_visit_media(visit):
 
         # Select middle ROI for visit preview
         #compute_representative_roi(visit["visit_id"])
+
         try:
             recalculate_visit_statistics(visit_id)
         except Exception as e:
@@ -147,7 +125,6 @@ def upload_visit_media(visit):
 
     except Exception as e:
         logging.exception("Upload failed")
-
 
 
 

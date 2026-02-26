@@ -209,6 +209,7 @@ def fetch_median_rois_by_date(current_date: date):
             ON r.roi_id = v.representative_roi_id
         WHERE v.night_date = %s
           AND v.approved = 1
+        ORDER BY v.start_time 
     """
 
     try:

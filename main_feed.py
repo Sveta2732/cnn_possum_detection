@@ -27,6 +27,7 @@ from inference.transforms import build_test_transform
 from video_utils.video_capture import initialise_video_capture
 # Visit lifecycle management
 from visits.visit_manager import create_new_visit, close_visit
+from hardware.feeder import trigger_feeder
 
 # Initialise project-wide logging
 setup_logger()
@@ -52,7 +53,7 @@ test_transform = build_test_transform()
 model = load_model(MODEL_PATH, DEVICE)
              
 # VIDEO CAPTURE INITIALISATION
-USE_VIDEO_FILE = False
+USE_VIDEO_FILE = True
 #VIDEO_PATH = "test_video.mp4"
 VIDEO_PATH = r"C:\Users\Home\Desktop\for_git\video_project\possum_detected\2026-02-21\visit_0125\visit.mp4"
 # Opens RTSP camera stream and retrieves FPS
@@ -308,6 +309,7 @@ while True:
             # Create new visit if none active
             if current_visit is None:
                 current_visit = create_new_visit(frame, POSSUM_DIR, frame_idx, v_fps)
+                trigger_feeder()
                 no_motion_window.clear()
                 current_visit["last_static_saved_time"] = None
                 if possum_detected_in_frame and len(possum_bboxes_in_frame) > 0:
@@ -363,6 +365,7 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 logging.info("Video feed processing stopped, all resources released.")
+
 
 
 
