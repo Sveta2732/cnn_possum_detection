@@ -1,10 +1,13 @@
-#  Real-Time Possum Detection System for Backyard Wildlife–Pet Conflict Prevention 🦦
+#  Backyard Real-Time Possum Detection System 🦦
 **End-to-end computer vision pipeline for Real-Time possums detection using motion analysis and CNN classification**
 
 🌐 **Live project website:** https://possum-tracker.sveta.com.au/en
+
+<p align="left">
+  <img src="images/possum_system.png" width="1000">
+</p>
+
 ## ⚠️ **Project in Progress / Work in Progress**  
-
-
 
 The goal of this project is to build a production-style end-to-end computer vision system
 that not only detects possums from a live night camera feed,
