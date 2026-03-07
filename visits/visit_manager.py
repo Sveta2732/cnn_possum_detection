@@ -10,6 +10,7 @@ from cloud.uploader import upload_visit_media
 from video_utils.trimming import trim_video
 from db.visit_repository import with_db_retry
 import queue
+from vision.spatial_rules import is_under_fence, DEFAULT_FENCE_Y_THRESHOLD
 
 upload_queue = queue.Queue()
 
@@ -113,3 +114,57 @@ def close_visit(current_visit, fps):
     logging.info(
         f"Visit {current_visit['visit_id']} closed."
     )
+
+def should_close_visit(
+    local_visit,
+    possum_absence_window,
+    no_motion_window,
+    frame_timestamp,
+    window_size,
+    fence_y_threshold,
+    under_fence_wait_sec
+):
+    if local_visit is None:
+        return False
+
+    last_bbox = local_visit.get("last_bbox")
+    last_seen = local_visit.get("last_seen_time")
+
+    def should_wait_under_fence():
+        if last_bbox is None:
+            return False
+
+        if not is_under_fence(
+            last_bbox,
+            fence_y_threshold=fence_y_threshold
+        ):
+            return False
+
+        if last_seen is None:
+            return False
+
+        time_since_last_seen = (
+            frame_timestamp - last_seen
+        ).total_seconds()
+
+        return time_since_last_seen < under_fence_wait_sec
+
+    model_negative = (
+        len(possum_absence_window) == 20 and
+        sum(possum_absence_window) == 0
+    )
+
+    no_motion = (
+        len(no_motion_window) == window_size and
+        sum(no_motion_window) == 0
+    )
+
+    if not (model_negative or no_motion):
+        return False
+
+    if should_wait_under_fence():
+        logging.info("Under fence. Waiting.")
+        return False
+
+    logging.info("Closing visit.")
+    return True
