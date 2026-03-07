@@ -27,3 +27,6 @@ BASE_DIR = os.path.dirname(__file__)
 MODEL_PATH = os.path.join(BASE_DIR, "models", "full_model_weight.pt")
 
 ESP32_IP = "192.168.5.200"
+
+FENCE_Y_THRESHOLD = 500
+UNDER_FENCE_WAIT_SEC = 300

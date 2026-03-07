@@ -508,6 +508,7 @@ def recalculate_visit_statistics(visit_id):
 
     except Exception:
         logging.exception(f"Statistics recalculation failed for visit {visit_id}")
+        
 
 # Example usage:
         
